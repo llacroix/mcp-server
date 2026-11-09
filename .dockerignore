@@ -1,0 +1,15 @@
+.git
+.venv
+__pycache__
+*.py[cod]
+*$py.class
+.env
+.env.*
+!.env.example
+dist
+build
+*.egg-info
+.pytest_cache
+.ruff_cache
+.mypy_cache
+skills

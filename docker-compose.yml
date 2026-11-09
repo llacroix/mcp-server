@@ -1,0 +1,81 @@
+services:
+  mcp-server:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ${MCP_CONTAINER_NAME:-mcp-server}
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-streamable-http}
+      MCP_HOST: ${MCP_HOST:-0.0.0.0}
+      MCP_PORT: ${MCP_PORT:-8000}
+      MCP_LOG_LEVEL: ${MCP_LOG_LEVEL:-INFO}
+      MCP_RESOURCE_SERVER_URL: ${MCP_RESOURCE_SERVER_URL:-https://${MCP_DOMAIN:-mcp.odoo.plus}}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      MCP_OAUTH_ISSUER_URL: ${MCP_OAUTH_ISSUER_URL:-}
+      MCP_OAUTH_JWKS_URL: ${MCP_OAUTH_JWKS_URL:-}
+      MCP_OAUTH_JWT_SECRET: ${MCP_OAUTH_JWT_SECRET:-}
+      MCP_OAUTH_JWT_ALGORITHMS: ${MCP_OAUTH_JWT_ALGORITHMS:-}
+      MCP_OAUTH_AUDIENCE: ${MCP_OAUTH_AUDIENCE:-}
+      MCP_OAUTH_INTROSPECTION_URL: ${MCP_OAUTH_INTROSPECTION_URL:-}
+      MCP_OAUTH_CLIENT_ID: ${MCP_OAUTH_CLIENT_ID:-}
+      MCP_OAUTH_CLIENT_SECRET: ${MCP_OAUTH_CLIENT_SECRET:-}
+      MCP_OAUTH_REQUIRED_SCOPES: ${MCP_OAUTH_REQUIRED_SCOPES:-}
+      MCP_VALIDATE_TOKEN_RESOURCE: ${MCP_VALIDATE_TOKEN_RESOURCE:-}
+      MCP_HTTP_OAUTH_ISSUER_URL: ${MCP_HTTP_OAUTH_ISSUER_URL:-}
+      MCP_HTTP_OAUTH_JWKS_URL: ${MCP_HTTP_OAUTH_JWKS_URL:-}
+      MCP_HTTP_OAUTH_JWT_SECRET: ${MCP_HTTP_OAUTH_JWT_SECRET:-}
+      MCP_HTTP_OAUTH_JWT_ALGORITHMS: ${MCP_HTTP_OAUTH_JWT_ALGORITHMS:-}
+      MCP_HTTP_OAUTH_AUDIENCE: ${MCP_HTTP_OAUTH_AUDIENCE:-}
+      MCP_HTTP_OAUTH_CLIENT_ID: ${MCP_HTTP_OAUTH_CLIENT_ID:-}
+      MCP_HTTP_OAUTH_CLIENT_SECRET: ${MCP_HTTP_OAUTH_CLIENT_SECRET:-}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-}
+      GOOGLE_CLIENT_SECRET_ID: ${GOOGLE_CLIENT_SECRET_ID:-}
+      GOOGLE_OAUTH_SCOPES: ${GOOGLE_OAUTH_SCOPES:-}
+    networks:
+      - proxy-1
+      - mcp-net
+    labels:
+      - "traefik.enable=true"
+      # HTTP router -> HTTPS redirect via redirect-https@file
+      - "traefik.http.routers.mcp-server-http.rule=Host(`${MCP_DOMAIN:-mcp.odoo.plus}`)"
+      - "traefik.http.routers.mcp-server-http.middlewares=redirect-https@file"
+      # HTTPS router with tls-resolver
+      - "traefik.http.routers.mcp-server.rule=Host(`${MCP_DOMAIN:-mcp.odoo.plus}`)"
+      - "traefik.http.routers.mcp-server.tls=true"
+      - "traefik.http.routers.mcp-server.tls.certresolver=tls-resolver"
+      - "traefik.http.routers.mcp-server.service=mcp-server"
+      # Backend service port
+      - "traefik.http.services.mcp-server.loadbalancer.server.port=${MCP_PORT:-8000}"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ${REDIS_CONTAINER_NAME:-mcp-redis}
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis-data:/data
+    networks:
+      - mcp-net
+    labels:
+      - "traefik.enable=false"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+networks:
+  mcp-net:
+    driver: bridge
+  proxy-1:
+    external: true
+    name: stack_proxy-1
+
+volumes:
+  redis-data:
